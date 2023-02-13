@@ -1,7 +1,32 @@
 using System;
+using System.ComponentModel;
+using System.Configuration.Install;
 using System.Diagnostics;
 using System.ServiceProcess;
 using System.Timers;
+
+[RunInstaller(true)]
+public class CmdWatchdogServiceInstaller : Installer
+{
+    public CmdWatchdogServiceInstaller()
+    {
+        ServiceProcessInstaller processInstaller = new ServiceProcessInstaller();
+        ServiceInstaller serviceInstaller = new ServiceInstaller();
+
+        // Service will run under system account
+        processInstaller.Account = ServiceAccount.LocalSystem;
+
+        // Service will have Start Type of Manual
+        serviceInstaller.StartType = ServiceStartMode.Manual;
+
+        serviceInstaller.ServiceName = "Cmd Watchdog Service";
+        serviceInstaller.DisplayName = "Cmd Watchdog Service";
+        serviceInstaller.Description = "This service monitors the cmd.exe process and restarts it if it closes";
+
+        Installers.Add(processInstaller);
+        Installers.Add(serviceInstaller);
+    }
+}
 
 public class CmdWatchdogService : ServiceBase
 {
@@ -66,18 +91,24 @@ public class CmdWatchdogService : ServiceBase
         if (Environment.UserInteractive)
         {
             // If the program is running as a standalone application, install the service
-            Console.WriteLine("Installing service...");
-            ManagedInstallerClass.InstallHelper(new string[] { "/i", System.Reflection.Assembly.GetExecutingAssembly().Location });
-            Console.WriteLine("Service installed successfully");
+            try
+            {
+                ManagedInstallerClass.InstallHelper(new string[] { System.Reflection.Assembly.GetExecutingAssembly().Location });
+                Console.WriteLine("Service installed successfully");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error installing service: " + ex.Message);
+            }
 
-            // Start the service after installation
-            ServiceController sc = new ServiceController("Cmd Watchdog Service");
-            sc.Start();
+            // Start the service after it has been installed
+            ServiceController serviceController = new ServiceController("Cmd Watchdog Service");
+            serviceController.Start();
             Console.WriteLine("Service started successfully");
         }
         else
         {
-            // If the program is running as a service, start the service
+            // If the program is running as a service, run the service using the ServiceBase class
             ServiceBase.Run(new CmdWatchdogService());
         }
     }
